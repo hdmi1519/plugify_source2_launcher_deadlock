@@ -88,7 +88,7 @@ jobs:
         if: success()
         with:
           tag_name: ${{ steps.get_version.outputs.VERSION }}
-          name: "Plugify Deadlock Launcher ${{ steps.get_version.outputs.VERSION }}"
+          name: "${{ steps.get_version.outputs.VERSION }}"
           body: "Build of plugify-source2-launcher for Deadlock (win)"
           files: B:/plugify-source2-launcher-deadlock-build-win.zip
         env:
