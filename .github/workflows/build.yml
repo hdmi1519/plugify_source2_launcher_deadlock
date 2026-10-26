@@ -1,0 +1,86 @@
+name: Build Deadlock S2launcher
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 */12 * * *'
+  push:
+    branches:
+      - main
+
+jobs:
+  sync-and-build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Sync upstream
+        shell: bash
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/untrustedmodders/plugify-source2-launcher.git || true
+          git fetch upstream
+          git merge upstream/main --no-edit || true
+          git submodule update --init --recursive
+
+      - name: Extract Version
+        id: get_version
+        shell: bash
+        run: |
+          VERSION=$(powershell -Command "(Get-Content .github/release-please-manifest.json | ConvertFrom-Json).'.'")
+          echo "VERSION=v$VERSION-deadlock" >> $GITHUB_OUTPUT
+
+      - name: Setup MSVC x64
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Configure CMake
+        run: cmake --preset Release-Deadlock
+
+      - name: Build Launcher
+        run: cmake --build --preset "Release (Deadlock)"
+
+      - name: Prepare Directory Structure
+        shell: bash
+        run: |
+          BUILD_DIR="build/Windows/Deadlock/Release-Deadlock"
+          BIN_DIR="staging/game/bin/win64"
+          MAMBA_DIR="staging/game/citadel/addons/plugify/bin/win64"
+
+          mkdir -p "$BIN_DIR"
+          mkdir -p "$MAMBA_DIR"
+
+          cp "$BUILD_DIR/s2launcher.exe" "$BIN_DIR/"
+          cp "$BUILD_DIR/sentry.jsonc" "$BIN_DIR/"
+
+          find "$BUILD_DIR" -name "sentry.rc.in" -exec cp {} "$BIN_DIR/" \; || true
+          find "$BUILD_DIR" -name "plugify.dll" -exec cp {} "$BIN_DIR/" \; || true
+          find "$BUILD_DIR" -name "sentry.dll" -exec cp {} "$BIN_DIR/" \; || true
+          find "$BUILD_DIR" -name "crashpad_handler.exe" -exec cp {} "$BIN_DIR/" \; || true
+
+          if [ -f "$BUILD_DIR/micromamba.exe" ]; then
+            cp "$BUILD_DIR/micromamba.exe" "$MAMBA_DIR/"
+          else
+            find "$BUILD_DIR" -name "micromamba.exe" -exec cp {} "$MAMBA_DIR/" \; || true
+          fi
+
+          cd staging
+          7z a -tzip ../plugify-source2-launcher-deadlock-build-win.zip .
+
+      - name: Publish Release
+        uses: softprops/action-gh-release@v2
+        if: success()
+        with:
+          tag_name: ${{ steps.get_version.outputs.VERSION }}
+          name: "Plugify Deadlock Launcher ${{ steps.get_version.outputs.VERSION }}"
+          body: "Build of plugify-source2-launcher for Deadlock (win)"
+          files: plugify-source2-launcher-deadlock-build-win.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
