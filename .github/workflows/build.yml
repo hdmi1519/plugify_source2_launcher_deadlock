@@ -19,8 +19,13 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
+      - name: Shorten Working Path
+        run: |
+          subst B: "${{ github.workspace }}"
+
       - name: Sync upstream
         shell: bash
+        working-directory: B:/
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
@@ -32,6 +37,7 @@ jobs:
       - name: Extract Version
         id: get_version
         shell: bash
+        working-directory: B:/
         run: |
           VERSION=$(powershell -Command "(Get-Content .github/release-please-manifest.json | ConvertFrom-Json).'.'")
           echo "VERSION=v$VERSION-deadlock" >> $GITHUB_OUTPUT
@@ -42,13 +48,16 @@ jobs:
           arch: x64
 
       - name: Configure CMake
+        working-directory: B:/
         run: cmake --preset Release-Deadlock
 
       - name: Build Launcher
+        working-directory: B:/
         run: cmake --build --preset "Release (Deadlock)"
 
       - name: Prepare Directory Structure
         shell: bash
+        working-directory: B:/
         run: |
           BUILD_DIR="build/Windows/Deadlock/Release-Deadlock"
           BIN_DIR="staging/game/bin/win64"
@@ -81,6 +90,6 @@ jobs:
           tag_name: ${{ steps.get_version.outputs.VERSION }}
           name: "Plugify Deadlock Launcher ${{ steps.get_version.outputs.VERSION }}"
           body: "Build of plugify-source2-launcher for Deadlock (win)"
-          files: plugify-source2-launcher-deadlock-build-win.zip
+          files: B:/plugify-source2-launcher-deadlock-build-win.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
